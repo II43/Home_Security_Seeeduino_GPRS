@@ -93,7 +93,11 @@ void loop()
     }
 
     //PIR
-    if(isPeopleDetected()) turnOnLED();
+    if(isPeopleDetected()) 
+	{
+		core.value = core.value + core.step;
+		turnOnLED();
+	}
     else turnOffLED();
 }
 void pinsInit()
@@ -150,13 +154,13 @@ void setup_gprs() {
     // Send message
     /*
     Serial.println("Init success, start to send SMS message...");
-    gprs.sendSMS("+420604909963","hello,world"); //define phone number and text
+    gprs.sendSMS("+420600XXXXXX","hello,world"); //define phone number and text
     */
     
     // Make call
     /*
     Serial.println("Init success, start to call...");
-    gprs.callUp("+420604909963");
+    gprs.callUp("+420600XXXXXX");
 
     while (1) 
     {
@@ -170,8 +174,113 @@ void process_message(char *message)
   if(NULL != strstr(message,"ALIVERRB"))
   {
     /* I am ALIVE, Ready to Respond Back */
+	!!! This should be sent only to a requester
     Serial.println("Sending confirmation ... I am ALIVE, Ready to Respond Back");
-    gprs.sendSMS("+420604909963","OK!");
+    gprs.sendSMS("+420600XXXXXX","OK!");
   }
+  
+  DISABLE
+  ENABLE
+  SETPARAMS (in future)
+  elseif RESET
+  elseif 
+  else
 }
+
+void surveillance()
+{
+	/* Trigger alarm */
+	if (core.value > core.threshold)
+	{
+		send message to all
+		core.value = 0;
+	}
+	else
+	{
+		/* Forgetting factor to avoid noisy alarms */
+		if (core.value > 0)
+		{
+			core.value = core.value - core.forget;
+		}
+		else
+		{
+			core.value = 0;
+		}
+	}
+	
+}
+ 
+
+
+struct monitor
+{
+	/* Parameters */
+	float threshold;
+	float step;
+	float forget;	
+	
+	/* Status */
+	uint8_t enabled;
+	float value;
+};
+
+/* Core monitor */
+struct monitor core;
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define PHONENUMBERLENGTH 13
+
+/* Dynamic memory phone book */
+struct phone
+{
+	char number[PHONENUMBERLENGTH];
+	uint8_t role;
+	/* Pointer to next item */
+	struct phone *next;
+};
+
+struct phone *phonebook = NULL;
+struct phone *last = NULL;
+
+int loadPhonebook(char *file)
+{
+	/* Loading phone book from a file */
+	char buffer[PHONENUMBERLENGTH];
+	FILE* f = fopen(file, "rt");
+	
+    while (fgets(buffer, MAXLINELENGTH, f) == NULL) 
+	{
+		if (line[0] != '\n' && line[0] != '\r' && line[0] != '#')
+	    {
+			/* Add it to phone book */
+			struct phone *n;
+			n = (struct phone *) malloc(sizeof(struct phone));
+			strncpy(n->number,buffer,PHONENUMBERLENGTH);
+			if (phonebook == NULL)
+			{
+				phonebook = n;
+				last = n;
+				n->role = 1; /* Admin */
+			}
+			else
+			{
+				n->role = 0;
+				last->next = n;
+				last = n;
+			}
+			
+		}
+    }
+	fclose(f);
+}
+
+
+
+
+
+
 

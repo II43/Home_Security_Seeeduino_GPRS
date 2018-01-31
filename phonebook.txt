@@ -1,0 +1,7 @@
+# This file contains phone numbers to be notified 
+# The first number is also an number that is allowed to perform administration tasks
+# Note that all lines are processed - only empty and lines starting with # are skipped
+
+# Below numbers are example - they are not valid. You will need to adjust this!
++420123456789
++420987654321
