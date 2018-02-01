@@ -2,3 +2,6 @@
 [submodule "externals/Seeeduino_GPRS"]
 	path = externals/Seeeduino_GPRS
 	url = https://github.com/Seeed-Studio/Seeeduino_GPRS.git
+[submodule "externals/SdFat"]
+	path = externals/SdFat
+	url = https://github.com/greiman/SdFat.git

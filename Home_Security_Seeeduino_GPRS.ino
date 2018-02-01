@@ -278,6 +278,8 @@ int loadPhonebook(char *file)
 	fclose(f);
 }
 
+/* SD Card */
+Of course it it CS = 10...........
 
 
 
