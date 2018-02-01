@@ -1,40 +1,3 @@
-/*
-  Blink
-  Turns on an LED on for one second, then off for one second, repeatedly.
-
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO 
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino model, check
-  the Technical Specs of your board  at https://www.arduino.cc/en/Main/Products
-  
-  This example code is in the public domain.
-
-  modified 8 May 2014
-  by Scott Fitzgerald
-  
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-  
-  modified 8 Sep 2016
-  by Colby Newman
-*/
-
-/*
-// the setup function runs once when you press reset or power the board
-void setup() {
-  // initialize digital pin LED_BUILTIN as an output.
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-
-// the loop function runs over and over again forever
-void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  delay(10000);                       // wait for a second
-  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-  delay(10000);                       // wait for a second
-}
-*/
 
 /*******************************************************************************/
 /*macro definitions of PIR motion sensor pin and LED pin*/
@@ -171,7 +134,7 @@ void setup_gprs() {
 
 void process_message(char *message)
 {
-  if(NULL != strstr(message,"ALIVERRB"))
+  if(NULL != strstr(message,"ALIVE"))
   {
     /* I am ALIVE, Ready to Respond Back */
 	!!! This should be sent only to a requester
@@ -208,6 +171,8 @@ void surveillance()
 		}
 	}
 	
+	/* Battery low detection */
+	
 }
  
 
@@ -232,7 +197,13 @@ struct monitor core;
 #include <stdlib.h>
 #include <string.h>
 
+#define ERROR(x) Serial.println(F(x))
+
 #define PHONENUMBERLENGTH 13
+
+#define SDCARDCHIPSELECT SS;
+
+SdFat sd;
 
 /* Dynamic memory phone book */
 struct phone
@@ -250,15 +221,27 @@ int loadPhonebook(char *file)
 {
 	/* Loading phone book from a file */
 	char buffer[PHONENUMBERLENGTH];
-	FILE* f = fopen(file, "rt");
+	SdFile f(file, O_READ);
 	
-    while (fgets(buffer, MAXLINELENGTH, f) == NULL) 
+	// check for open error
+    if (!rdfile.isOpen()) 
+	{
+		ERROR("Cannot open file on SD card!");
+	}
+	
+    while (f.fgets(buffer, PHONENUMBERLENGTH) == NULL) 
 	{
 		if (line[0] != '\n' && line[0] != '\r' && line[0] != '#')
 	    {
 			/* Add it to phone book */
 			struct phone *n;
 			n = (struct phone *) malloc(sizeof(struct phone));
+			
+			if (n == NULL)
+			{
+				ERROR("Cannot allocate memory for a new phone number!");
+			}
+			
 			strncpy(n->number,buffer,PHONENUMBERLENGTH);
 			if (phonebook == NULL)
 			{
@@ -275,14 +258,20 @@ int loadPhonebook(char *file)
 			
 		}
     }
-	fclose(f);
+	f.close();
 }
 
-/* SD Card */
-Of course it it CS = 10...........
 
-
-
-
+void setup_sdcard()
+{
+  /* Setup SD Card */
+  /* Initialize at the highest speed supported by the board that is
+     not over 50 MHz. Try a lower speed if SPI errors occur. */
+  
+  if (!sd.begin(SDCARDCHIPSELECT, SD_SCK_MHZ(50))) 
+  {
+    ERROR("Cannot initialize SD card!");
+  }
+}
 
 
