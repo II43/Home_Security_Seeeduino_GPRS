@@ -1,6 +1,9 @@
 #ifndef WATCHDOGAVR_H
 #define WATCHDOGAVR_H
 
+extern void sleep_gprs();
+extern void wakeup_gprs();
+
 class WatchdogAVR {
 public:
     WatchdogAVR():
@@ -43,5 +46,6 @@ private:
     // timer was enabled.
     int _wdto;
 };
+
 
 #endif

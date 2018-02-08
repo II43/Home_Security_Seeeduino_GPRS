@@ -10,6 +10,8 @@
 
 #include "WatchdogAVR.h"
 
+#include "Home_Security_Seeeduino_GPRS.h"
+
 // Define watchdog timer interrupt.
 ISR(WDT_vect)
 {
@@ -68,7 +70,13 @@ int WatchdogAVR::sleep(int maxPeriodMS) {
       PLLCSR &= ~_BV(PLLE);   // turn off USB PLL
       USBCON &= ~_BV(USBE);   // disable USB
     #endif
-
+	
+	// SIM800 goes to sleep
+	sleep_gprs();
+	
+	// Add external interrupt to wake on PIN2
+	attachInterrupt(digitalPinToInterrupt(PIRMOTIONSENSOR), ISR_PIR, CHANGE);
+	
     // Set full power-down sleep mode and go to sleep.
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     sleep_mode();
@@ -78,6 +86,12 @@ int WatchdogAVR::sleep(int maxPeriodMS) {
     // Once awakened by the watchdog execution resumes here.  Start by disabling
     // sleep.
     sleep_disable();
+	
+	// Disable external interrupt
+	detachInterrupt(digitalPinToInterrupt(PIRMOTIONSENSOR));
+	
+	// SIM800 wakes up
+	wakeup_gprs(); 
 
     // Check if the user had the watchdog enabled before sleep and re-enable it.
     if (_wdto != -1) {
@@ -132,6 +146,16 @@ void WatchdogAVR::_setPeriod(int maxMS, int &wdto, int &actualMS) {
         wdto     = WDTO_15MS;
         actualMS = 15;
     }
+}
+
+void ISR_PIR()
+{
+  /* Do nothing for now */
+  
+  /*
+  sleep_disable();
+  detachInterrupt(digitalPinToInterrupt(PIRMOTIONSENSOR));
+  */ 	
 }
 
 #endif

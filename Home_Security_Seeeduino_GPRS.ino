@@ -1,17 +1,19 @@
+/********************************************************************************/
+/* Home security system for Seeeduino GPRS										*/
+/********************************************************************************/
 
-/*******************************************************************************/
-/*macro definitions of PIR motion sensor pin and LED pin*/
-#define PIRMOTIONSENSOR 2//Use pin 8 to receive the signal from the module
-#define LED    13//the Grove - LED is connected to D4 of Arduino
+#include "Home_Security_Seeeduino_GPRS.h"
+
+#define PIRLED    13
 
 #include <gprs.h>
 #include <SoftwareSerial.h>
 
 #include <time.h>
 
-GPRS gprs;
+#include <Adafruit_SleepyDog.h>
 
-struct tm lastHeartbeatMsg;
+GPRS gprs;
 
 void setup()
 {
@@ -38,14 +40,14 @@ void loop()
 	int messageIndex;	
 	
 	/* Surveillance via PIR sensor */
-	if(isPeopleDetected()) 
+	if(isPeopPIRLEDetected()) 
 	{
 		core.value = core.value + core.step;
-		turnOnLED();
+		turnOnPIRLED();
 	}
     else 
 	{
-		turnOffLED();
+		turnOffPIRLED();
 	}
 	surveillance();
 	
@@ -76,27 +78,29 @@ void loop()
     else 
 	{
         /* Go to sleep */
+		INFO("Going to sleep now!");
 		delay(100);
+		int sleep_ms = Watchdog.sleep(8000);
+		INFO("I'm awake now!");	
     }
-
 }
 
 void setup_pir()
 {
     pinMode(PIRMOTIONSENSOR, INPUT);
-    pinMode(LED,OUTPUT);
+    pinMode(PIRLED,OUTPUT);
 }
 
-void turnOnLED()
+void turnOnPIRLED()
 {
-    digitalWrite(LED,HIGH);
+    digitalWrite(PIRLED,HIGH);
 }
-void turnOffLED()
+void turnOffPIRLED()
 {
-    digitalWrite(LED,LOW);
+    digitalWrite(PIRLED,LOW);
 }
 
-boolean isPeopleDetected()
+boolean isPeopPIRLEDetected()
 {
     /* Detect whether anyone moves in it's detecting range */
 	
@@ -142,31 +146,31 @@ void process_message(char *message)
     /* I am ALIVE, ready to respond back */
 	/* In future this could be sent only to a requester */
     INFO("Sending confirmation ... I am ALIVE, ready to respond back!");
-	if (core.enabled) 
+	if (core.enabPIRLED) 
 	{
-		send_message(MSG("I am alive! Alarm enabled!"), 1);
+		send_message(MSG("I am alive! Alarm enabPIRLED!"), 1);
 	}
 	else
 	{
-		send_message(MSG("I am alive! Alarm disabled!"), 1);
+		send_message(MSG("I am alive! Alarm disabPIRLED!"), 1);
 	}
   }
   
   if(NULL != strstr(message,"DISABLE"))
   {
     /* Disable alarm*/
-	core.enabled = 0;
-	INFO("Sending confirmation ... Alarm disabled!");
-	send_message(MSG("Alarm disabled!"), 1);
+	core.enabPIRLED = 0;
+	INFO("Sending confirmation ... Alarm disabPIRLED!");
+	send_message(MSG("Alarm disabPIRLED!"), 1);
 	
   }
   
   if(NULL != strstr(message,"ENABLE"))
   {
     /* Enable alarm*/
-	core.enabled = 1;
-	INFO("Sending confirmation ... Alarm enabled!");
-	send_message(MSG("Alarm enabled!"), 1);
+	core.enabPIRLED = 1;
+	INFO("Sending confirmation ... Alarm enabPIRLED!");
+	send_message(MSG("Alarm enabPIRLED!"), 1);
 	
   }
   
@@ -174,7 +178,7 @@ void process_message(char *message)
   {
     /* Reset alarm */
 	core.value = 0;
-	core.enabled = 1;
+	core.enabPIRLED = 1;
 	INFO("Sending confirmation ... Reseting alarm!");
 	send_message(MSG("Alarm reset!"), 1);
   }
@@ -251,7 +255,7 @@ struct monitor
 	float forget;	
 	
 	/* Status */
-	uint8_t enabled;
+	uint8_t enabPIRLED;
 	float value;
 };
 
@@ -265,7 +269,7 @@ void setup_monitor()
 	core->step = MONITORSTEP;
 	core->forget = MONITORFORGET;
 	
-	core->enabled = 1;
+	core->enabPIRLED = 1;
 	core->value = 0;
 }
 
@@ -360,6 +364,8 @@ void setup_sdcard()
 
 /* Sleep functions */
 
+#define DTR800 11
+
 void sleep_gprs()
 {
    digitalWrite(DTR800,HIGH);
@@ -369,12 +375,12 @@ void sleep_gprs()
    gprs.serialSIM800.println();
 }
 
-#define DTR800 11
-
 void wakeup_gprs()
 {
-	digitalWrite(DTR800,HIGH);
-	
+	digitalWrite(DTR800,LOW);
+	delay(10);
+	gprs.serialSIM800.println();
+	gprs.serialSIM800.println("AT+CSCLK=0");
 }
 
 
