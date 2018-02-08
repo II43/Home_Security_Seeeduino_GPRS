@@ -1,7 +1,7 @@
 
 /*******************************************************************************/
 /*macro definitions of PIR motion sensor pin and LED pin*/
-#define PIR_MOTION_SENSOR 2//Use pin 8 to receive the signal from the module
+#define PIRMOTIONSENSOR 2//Use pin 8 to receive the signal from the module
 #define LED    13//the Grove - LED is connected to D4 of Arduino
 
 #include <gprs.h>
@@ -15,60 +15,78 @@ struct tm lastHeartbeatMsg;
 
 void setup()
 {
-    pinsInit();
-    setup_gprs();
+    /* Main setup */
+	Serial.begin(9600);
+	setup_pir();
+    
+	setup_sdcard();
+	load_phonebook(F("phonenumber.txt");
+
+	setup_gprs();
+	
+	setup_monitor();
 }
 
 
 
 void loop()
 {
-    //Phone
+    /* Main loop */
     char gprsBuffer[64];
     char *s = NULL;
-    int inComing;
-    
-    if(gprs.serialSIM800.available()) {
-        inComing = 1;
-    }
-    else {
-        inComing = 0;
-        delay(100);
-    }
-
-    if(inComing){
-        gprs.readBuffer(gprsBuffer,32,DEFAULT_TIMEOUT);
+	char message[MESSAGE_LENGTH];
+	int messageIndex;	
+	
+	/* Surveillance via PIR sensor */
+	if(isPeopleDetected()) 
+	{
+		core.value = core.value + core.step;
+		turnOnLED();
+	}
+    else 
+	{
+		turnOffLED();
+	}
+	surveillance();
+	
+	/* Communication */
+    if(gprs.serialSIM800.available()) 
+	{
+		gprs.readBuffer(gprsBuffer, 32, DEFAULT_TIMEOUT);
         Serial.print(gprsBuffer);
 
-        if(NULL != strstr(gprsBuffer,"RING")) {
-            gprs.answer();
-        }else if(NULL != (s = strstr(gprsBuffer,"+CMTI: \"SM\""))) { //SMS: $$+CMTI: "SM",24$$
-            char message[MESSAGE_LENGTH];
-            int messageIndex = atoi(s+12);
-            gprs.readSMS(messageIndex, message,MESSAGE_LENGTH);
-            Serial.print(message);
+        if(NULL != strstr(gprsBuffer, "RING")) 
+		{
+            /* Answer the incoming call - not used */
+			gprs.answer();
+		}
+        else if(NULL != (s = strstr(gprsBuffer, "+CMTI: \"SM\""))) 
+		{ 
+            /* Incoming SMS */
+            messageIndex = atoi(s+12);
+            gprs.readSMS(messageIndex, message, MESSAGE_LENGTH);
+            INFO("Received SMS");
+			INFOV(message);
 
             process_message(message);
             
         }
         gprs.cleanBuffer(gprsBuffer,32);
-        inComing = 0;
+    }
+    else 
+	{
+        /* Go to sleep */
+		delay(100);
     }
 
-    //PIR
-    if(isPeopleDetected()) 
-	{
-		core.value = core.value + core.step;
-		turnOnLED();
-	}
-    else turnOffLED();
 }
-void pinsInit()
+
+void setup_pir()
 {
-    Serial.begin(9600);
-    pinMode(PIR_MOTION_SENSOR, INPUT);
+    pinMode(PIRMOTIONSENSOR, INPUT);
     pinMode(LED,OUTPUT);
 }
+
 void turnOnLED()
 {
     digitalWrite(LED,HIGH);
@@ -77,77 +95,101 @@ void turnOffLED()
 {
     digitalWrite(LED,LOW);
 }
-/***************************************************************/
-/*Function: Detect whether anyone moves in it's detecting range*/
-/*Return:-boolean, ture is someone detected.*/
+
 boolean isPeopleDetected()
 {
-    int sensorValue = digitalRead(PIR_MOTION_SENSOR);
-    if(sensorValue == HIGH)//if the sensor value is HIGH?
+    /* Detect whether anyone moves in it's detecting range */
+	
+	int sensorValue = digitalRead(PIRMOTIONSENSOR);
+    if(sensorValue == HIGH)
     {
-        return true;//yes,return ture
+        return true;
     }
     else
     {
-        return false;//no,return false
+        return false;
     }
 }
 
-
-
-void setup_gprs() {
+void setup_gprs() 
+{
     int init;
-    Serial.begin(9600);
-    Serial.println("GPRS - Send SMS Test ...");
     gprs.preInit();
     delay(1000);
     while(0 != (init = gprs.init())) {
         delay(1000);
-        Serial.print("Initialization error - (");
-        Serial.print(init);
-        Serial.print(") \r\n");
+        ERROR("GPRS initialization error - (");
+        ERRORV(init);
+        ERROR(") \r\n");
     }
-    Serial.println("Initialization successful!");
+    INFO("GPRS initialization successful!");
 
     // Get current date in format yy/MM/dd,hh:mm:ss
     char tmBuffer[sizeof("yy/MM/dd,hh:mm:ss")];
     gprs.getCurrentTime(tmBuffer);
-    Serial.println(tmBuffer);
+    INFOV(tmBuffer);
 
     // Send message
-    /*
-    Serial.println("Init success, start to send SMS message...");
-    gprs.sendSMS("+420600XXXXXX","hello,world"); //define phone number and text
-    */
-    
-    // Make call
-    /*
-    Serial.println("Init success, start to call...");
-    gprs.callUp("+420600XXXXXX");
-
-    while (1) 
-    {
-      gprs.getPhoneActivityStatus();
-    }
-    */
+    INFO("Init success, sending message to administrator only");
+    send_message(MSG("GPRS initialization successful!"), 0);
+ 
 }
 
 void process_message(char *message)
 {
   if(NULL != strstr(message,"ALIVE"))
   {
-    /* I am ALIVE, Ready to Respond Back */
-	!!! This should be sent only to a requester
-    Serial.println("Sending confirmation ... I am ALIVE, Ready to Respond Back");
-    gprs.sendSMS("+420600XXXXXX","OK!");
+    /* I am ALIVE, ready to respond back */
+	/* In future this could be sent only to a requester */
+    INFO("Sending confirmation ... I am ALIVE, ready to respond back!");
+	if (core.enabled) 
+	{
+		send_message(MSG("I am alive! Alarm enabled!"), 1);
+	}
+	else
+	{
+		send_message(MSG("I am alive! Alarm disabled!"), 1);
+	}
   }
   
-  DISABLE
-  ENABLE
-  SETPARAMS (in future)
-  elseif RESET
-  elseif 
-  else
+  if(NULL != strstr(message,"DISABLE"))
+  {
+    /* Disable alarm*/
+	core.enabled = 0;
+	INFO("Sending confirmation ... Alarm disabled!");
+	send_message(MSG("Alarm disabled!"), 1);
+	
+  }
+  
+  if(NULL != strstr(message,"ENABLE"))
+  {
+    /* Enable alarm*/
+	core.enabled = 1;
+	INFO("Sending confirmation ... Alarm enabled!");
+	send_message(MSG("Alarm enabled!"), 1);
+	
+  }
+  
+  if(NULL != strstr(message,"RESET"))
+  {
+    /* Reset alarm */
+	core.value = 0;
+	core.enabled = 1;
+	INFO("Sending confirmation ... Reseting alarm!");
+	send_message(MSG("Alarm reset!"), 1);
+  }
+  
+  if(NULL != strstr(message,"PARAMS"))
+  {
+    /* Setting parameters */
+	
+  }
+  
+  if(NULL != strstr(message,"STATUS"))
+  {
+    /* Full status */
+	
+  }
 }
 
 void surveillance()
@@ -155,7 +197,7 @@ void surveillance()
 	/* Trigger alarm */
 	if (core.value > core.threshold)
 	{
-		send message to all
+		send_message(MSG("Attention!!! Alarm triggered!"), 1);
 		core.value = 0;
 	}
 	else
@@ -172,10 +214,34 @@ void surveillance()
 	}
 	
 	/* Battery low detection */
-	
+	/* TODO */
 }
  
 
+void send_message(char *message, uint8_t roleThrs)
+{
+	/* Send message via SMS */
+	struct phone *p;
+	
+	/* Loop through the phone numbers */
+	p = phonebook;
+	
+	while (phonebook != NULL)
+	{
+		if (p->role <= roleThrsh)
+		{
+			/* Send it only to desired role */
+			gprs.sendSMS(p->number,message);	
+		}
+		
+		/* Next one */
+		p = p->next;
+	}
+} 
+ 
+#define MONITORTHRESHOLD 20
+#define MONITORSTEP		 1 
+#define MONITORFORGET	 0.001
 
 struct monitor
 {
@@ -192,12 +258,27 @@ struct monitor
 /* Core monitor */
 struct monitor core;
 
+void setup_monitor()
+{
+	/* Setup the monitor */
+	core->threshold = MONITORTHRESHOLD;
+	core->step = MONITORSTEP;
+	core->forget = MONITORFORGET;
+	
+	core->enabled = 1;
+	core->value = 0;
+}
+
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define ERROR(x) Serial.println(F(x))
+#define ERROR(x) 	Serial.println(F(x))
+#define ERRORV(x) 	Serial.println(x)
+#define INFO(x)		Serial.println(F(x))
+#define INFOV(x)	Serial.println(x)
+#define MSG(x) 		F(x)
 
 #define PHONENUMBERLENGTH 13
 
@@ -217,13 +298,15 @@ struct phone
 struct phone *phonebook = NULL;
 struct phone *last = NULL;
 
-int loadPhonebook(char *file)
+int load_phonebook(char *file)
 {
 	/* Loading phone book from a file */
 	char buffer[PHONENUMBERLENGTH];
 	SdFile f(file, O_READ);
 	
-	// check for open error
+	INFO("Loading phone numbers");
+	
+	// Check for open error
     if (!rdfile.isOpen()) 
 	{
 		ERROR("Cannot open file on SD card!");
@@ -243,15 +326,16 @@ int loadPhonebook(char *file)
 			}
 			
 			strncpy(n->number,buffer,PHONENUMBERLENGTH);
+			INFOV(n->number);
 			if (phonebook == NULL)
 			{
 				phonebook = n;
 				last = n;
-				n->role = 1; /* Admin */
+				n->role = 0; /* Admin */
 			}
 			else
 			{
-				n->role = 0;
+				n->role = 1;
 				last->next = n;
 				last = n;
 			}
