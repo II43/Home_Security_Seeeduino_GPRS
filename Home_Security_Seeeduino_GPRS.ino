@@ -20,7 +20,7 @@ void setup()
 	setup_pir();
     
 	setup_sdcard();
-	load_phonebook(F("phonenumber.txt");
+	load_phonebook(F("phonebook.txt");
 
 	setup_gprs();
 	
@@ -356,6 +356,25 @@ void setup_sdcard()
   {
     ERROR("Cannot initialize SD card!");
   }
+}
+
+/* Sleep functions */
+
+void sleep_gprs()
+{
+   digitalWrite(DTR800,HIGH);
+   
+   gprs.serialSIM800.println("AT+CSCLK=1");
+   delay(100);
+   gprs.serialSIM800.println();
+}
+
+#define DTR800 11
+
+void wakeup_gprs()
+{
+	digitalWrite(DTR800,HIGH);
+	
 }
 
 
