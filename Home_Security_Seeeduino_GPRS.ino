@@ -9,10 +9,10 @@
 #include <gprs.h>
 #include <SoftwareSerial.h>
 
-#include "Adafruit_SleepyDog.h"
+#include <Adafruit_SleepyDog.h>
 
 #include <SPI.h>
-#include "SdFat.h"
+#include <SdFat.h> 
 
 #include "Home_Security_Seeeduino_GPRS.h"
 
@@ -33,6 +33,9 @@ SdFat sd;
 struct phone *phonebook = NULL;
 struct phone *last = NULL;
 
+/* PIR */
+const int PIRtp = PIRMOTIONSENSOR;
+
 /********************************************************************************/
 /* Functions                                                                    */
 /********************************************************************************/
@@ -41,14 +44,17 @@ void setup()
 {
   /* Main setup */
   Serial.begin(9600);
+  INFO("Starting setup sequence");
+
   setup_pir();
     
   setup_sdcard();
-  load_phonebook(F("phonebook.txt");
+  load_phonebook((char *)F("phonebook.txt"));
   
   setup_gprs();
   
   setup_monitor();
+  INFO("Completed!");
 }
 
 
@@ -102,7 +108,9 @@ void loop()
     /* Go to sleep */
     INFO("Going to sleep now!");
     delay(100);
+    #ifndef NOSLEEP
     int sleep_ms = Watchdog.sleep(8000);
+    #endif
     INFO("I'm awake now!");	
   }
 }
@@ -152,9 +160,11 @@ void setup_gprs()
   INFO("GPRS initialization successful!");
   
   // Get current date in format yy/MM/dd,hh:mm:ss
+  /* TODO - getCurrent Time function needs to be ported
   char tmBuffer[sizeof("yy/MM/dd,hh:mm:ss")];
   gprs.getCurrentTime(tmBuffer);
   INFOV(tmBuffer);
+  */
   
   // Send message
   INFO("Init success, sending message to administrator only");
@@ -168,7 +178,7 @@ void process_message(char *message)
     /* I am ALIVE, ready to respond back */
     /* In future this could be sent only to a requester */
     INFO("Sending confirmation ... I am ALIVE, ready to respond back!");
-    if (core.enabPIRLED) 
+    if (core.enabled) 
     {
       send_message(MSG("I am alive! Alarm enabPIRLED!"), 1);
     }
@@ -181,7 +191,7 @@ void process_message(char *message)
   if(NULL != strstr(message,"DISABLE"))
   {
     /* Disable alarm*/
-    core.enabPIRLED = 0;
+    core.enabled = 0;
     INFO("Sending confirmation ... Alarm disabPIRLED!");
     send_message(MSG("Alarm disabPIRLED!"), 1);
   }
@@ -189,7 +199,7 @@ void process_message(char *message)
   if(NULL != strstr(message,"ENABLE"))
   {
     /* Enable alarm*/
-    core.enabPIRLED = 1;
+    core.enabled = 1;
     INFO("Sending confirmation ... Alarm enabPIRLED!");
     send_message(MSG("Alarm enabPIRLED!"), 1);
   }
@@ -198,7 +208,7 @@ void process_message(char *message)
   {
     /* Reset alarm */
     core.value = 0;
-    core.enabPIRLED = 1;
+    core.enabled = 0;
     INFO("Sending confirmation ... Reseting alarm!");
     send_message(MSG("Alarm reset!"), 1);
   }
@@ -253,10 +263,15 @@ void send_message(char *message, uint8_t roleThrs)
 	
 	while (phonebook != NULL)
 	{
-		if (p->role <= roleThrsh)
+		if (p->role <= roleThrs)
 		{
 			/* Send it only to desired role */
-			gprs.sendSMS(p->number,message);	
+      #ifndef NOMESSAGE
+			gprs.sendSMS(p->number,message);
+      #else
+      INFO("Sending message");
+      INFOV(message);
+      #endif	
 		}
 		
 		/* Next one */
@@ -267,12 +282,13 @@ void send_message(char *message, uint8_t roleThrs)
 void setup_monitor()
 {
 	/* Setup the monitor */
-	core->threshold = MONITORTHRESHOLD;
-	core->step = MONITORSTEP;
-	core->forget = MONITORFORGET;
+	core.threshold = MONITORTHRESHOLD;
+	core.step = MONITORSTEP;
+	core.forget = MONITORFORGET;
 	
-	core->enable = 1;
-	core->value = 0;
+  /* Monitor initially disabled */
+	core.enabled = 0;
+	core.value = 0;
 }
 
 int load_phonebook(char *file)
@@ -284,15 +300,15 @@ int load_phonebook(char *file)
 	INFO("Loading phone numbers");
 	
 	// Check for open error
-    if (!rdfile.isOpen()) 
+  if (!f.isOpen()) 
 	{
 		ERROR("Cannot open file on SD card!");
 	}
 	
-    while (f.fgets(buffer, PHONENUMBERLENGTH) == NULL) 
+  while (f.fgets(buffer, PHONENUMBERLENGTH) == NULL) 
 	{
-		if (line[0] != '\n' && line[0] != '\r' && line[0] != '#')
-	    {
+		if (buffer[0] != '\n' && buffer[0] != '\r' && buffer[0] != '#')
+	  {
 			/* Add it to phone book */
 			struct phone *n;
 			n = (struct phone *) malloc(sizeof(struct phone));
@@ -332,6 +348,10 @@ void setup_sdcard()
   if (!sd.begin(SDCARDCHIPSELECT, SD_SCK_MHZ(50))) 
   {
     ERROR("Cannot initialize SD card!");
+  }
+  else
+  {
+    INFO("SD card ready!");
   }
 }
 

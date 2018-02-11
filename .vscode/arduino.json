@@ -1,0 +1,5 @@
+{
+    "sketch": "Home_Security_Seeeduino_GPRS.ino",
+    "port": "COM1",
+    "board": "arduino:avr:leonardo"
+}

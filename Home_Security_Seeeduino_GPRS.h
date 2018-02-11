@@ -6,7 +6,7 @@
 #define ERRORV(x)   Serial.println(x)
 #define INFO(x)     Serial.println(F(x))
 #define INFOV(x)    Serial.println(x)
-#define MSG(x)      F(x)
+#define MSG(x)      (char*)F(x)
 
 /* PIR */
 #define PIRMOTIONSENSOR   2
@@ -24,6 +24,10 @@
 /* SD card */
 #define SDCARDCHIPSELECT  SS
 
+/* Debug */
+#define NOSLEEP
+#define NOMESSAGE
+
 /********************************************************************************/
 /* Data types                                                                   */
 /********************************************************************************/
@@ -37,7 +41,7 @@ struct monitor
   float forget; 
   
   /* Status */
-  uint8_t enabPIRLED;
+  uint8_t enabled;
   float value;
 };
 
@@ -50,7 +54,9 @@ struct phone
   struct phone *next;
 };
 
-/* Functions */
+/********************************************************************************/
+/* Functions                                                                    */
+/********************************************************************************/
 void sleep_gprs();
 void wakeup_gprs();
 

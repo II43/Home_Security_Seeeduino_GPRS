@@ -4,6 +4,8 @@
 extern void sleep_gprs();
 extern void wakeup_gprs();
 
+extern const int PIRtp;
+
 class WatchdogAVR {
 public:
     WatchdogAVR():
@@ -47,5 +49,6 @@ private:
     int _wdto;
 };
 
+void ISR_PIR();
 
 #endif
