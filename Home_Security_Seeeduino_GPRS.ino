@@ -21,10 +21,11 @@
 /********************************************************************************/
 
 /* SIM800 */
-GPRS gprs;
+GPRS gprs(9600);
 
 /* Core monitor */
 struct monitor core;
+boolean lastDetection;
 
 /* SD card */
 SdFat sd;
@@ -42,19 +43,37 @@ const int PIRtp = PIRMOTIONSENSOR;
 
 void setup()
 {
+  boolean success_sdcard;
   /* Main setup */
   Serial.begin(9600);
+  delay(10000);
   INFO("Starting setup sequence");
-
+  delay(500);
+  
   setup_pir();
     
-  setup_sdcard();
-  load_phonebook((char *)F("phonebook.txt"));
+  success_sdcard = setup_sdcard();
+  if (success_sdcard)
+  {
+    char filename[] = "phonebook.txt";
+    load_phonebook(filename);
+    //load_phonebook((char *)F("phonebook.txt"));
+  }
+  else
+  {
+    /* Print the error first */
+    // sd.errorPrint();
+    sd.initErrorPrint();
+    /* Load backup phone number in case SD card fails */
+  }
   
   setup_gprs();
   
+  delay(500);
+  
   setup_monitor();
   INFO("Completed!");
+  delay(200);
 }
 
 
@@ -62,28 +81,47 @@ void setup()
 void loop()
 {
   /* Main loop */
-  char gprsBuffer[64];
+  char gprsBuffer[MESSAGE_LENGTH];
   char *s = NULL;
   char message[MESSAGE_LENGTH];
-  int messageIndex;	
-  
+  int messageIndex;
+	  
   /* Surveillance via PIR sensor */
-  if(isPeopleDetected()) 
+  if(isPeopleDetected() && !lastDetection) 
   {
     core.value = core.value + core.step;
     turnOnLED();
+    lastDetection = true;
+    INFO("Monitor value:");
+    INFOV(core.value);
+    delay(200);
   }
   else 
   {
     turnOffLED();
+    lastDetection = false;
   }
+  
   surveillance();
+  
+  #ifdef DEBUG
+  INFOV(core.value);
+  delay(200);
+  #endif
   
   /* Communication */
   if(gprs.serialSIM800.available()) 
   {
-    gprs.readBuffer(gprsBuffer, 32, DEFAULT_TIMEOUT);
-    Serial.print(gprsBuffer);
+    #ifdef DEBUG
+    INFO("Something is available at SIM800");
+    delay(1000);
+    #endif
+    gprs.readBuffer(gprsBuffer, MESSAGE_LENGTH, DEFAULT_TIMEOUT);
+    delay(500);
+    
+    #ifdef DEBUG
+    //INFOV(gprsBuffer);
+    #endif
     
     if(NULL != strstr(gprsBuffer, "RING")) 
     {
@@ -94,24 +132,37 @@ void loop()
     { 
       /* Incoming SMS */
       messageIndex = atoi(s+12);
+      #ifdef DEBUG
+      INFO("Reading incoming message");
+      delay(200);
+      #endif
       gprs.readSMS(messageIndex, message, MESSAGE_LENGTH);
+      delay(500);
       INFO("Received SMS");
       INFOV(message);
-      
+
       process_message(message);
-  
+      delay(500);
+
+      /* Delete message */
+      char at[MAXBUFFERLENGTH];
+      sprintf(at,"AT+CMGD=%d",messageIndex);
+      gprs.sendCmd(at);
+      delay(500);
+      
     }
-    gprs.cleanBuffer(gprsBuffer,32);
+    gprs.cleanBuffer(gprsBuffer,MESSAGE_LENGTH);
+    delay(500);
   }
   else 
   {
     /* Go to sleep */
-    INFO("Going to sleep now!");
-    delay(100);
     #ifndef NOSLEEP
+    INFO("Going to sleep now!");
+    delay(200);
     int sleep_ms = Watchdog.sleep(8000);
-    #endif
     INFO("I'm awake now!");	
+    #endif
   }
 }
 
@@ -173,6 +224,10 @@ void setup_gprs()
 
 void process_message(char *message)
 {
+        /* AT+CMGD=1,4 */
+      /* AT+CPMS="SM" */
+  char at[MAXBUFFERLENGTH];
+  
   if(NULL != strstr(message,"ALIVE"))
   {
     /* I am ALIVE, ready to respond back */
@@ -180,11 +235,11 @@ void process_message(char *message)
     INFO("Sending confirmation ... I am ALIVE, ready to respond back!");
     if (core.enabled) 
     {
-      send_message(MSG("I am alive! Alarm enabPIRLED!"), 1);
+      send_message(MSG("I am alive! Alarm enabled!"), 1);
     }
     else
     {
-      send_message(MSG("I am alive! Alarm disabPIRLED!"), 1);
+      send_message(MSG("I am alive! Alarm disabled!"), 1);
     }
   }
   
@@ -192,16 +247,16 @@ void process_message(char *message)
   {
     /* Disable alarm*/
     core.enabled = 0;
-    INFO("Sending confirmation ... Alarm disabPIRLED!");
-    send_message(MSG("Alarm disabPIRLED!"), 1);
+    INFO("Sending confirmation ... Alarm disabled!");
+    send_message(MSG("Alarm disabled!"), 1);
   }
   
   if(NULL != strstr(message,"ENABLE"))
   {
     /* Enable alarm*/
     core.enabled = 1;
-    INFO("Sending confirmation ... Alarm enabPIRLED!");
-    send_message(MSG("Alarm enabPIRLED!"), 1);
+    INFO("Sending confirmation ... Alarm enabled!");
+    send_message(MSG("Alarm enabled!"), 1);
   }
   
   if(NULL != strstr(message,"RESET"))
@@ -211,6 +266,9 @@ void process_message(char *message)
     core.enabled = 0;
     INFO("Sending confirmation ... Reseting alarm!");
     send_message(MSG("Alarm reset!"), 1);
+
+    sprintf(at,"AT+CMGD=1,4");
+    gprs.sendCmd(at);
   }
   
   if(NULL != strstr(message,"PARAMS"))
@@ -233,6 +291,10 @@ void surveillance()
 		{
 		  send_message(MSG("Attention!!! Alarm triggered!"), 1);
 		}
+    else
+    {
+      INFO("Monitor value exceeded a threshold. Reseting to zero!");
+    }
 		core.value = 0;
 	}
 	else
@@ -244,6 +306,7 @@ void surveillance()
 		}
 		else
 		{
+			/* Do not allow negative */
 			core.value = 0;
 		}
 	}
@@ -261,7 +324,7 @@ void send_message(char *message, uint8_t roleThrs)
 	/* Loop through the phone numbers */
 	p = phonebook;
 	
-	while (phonebook != NULL)
+	while (p != NULL)
 	{
 		if (p->role <= roleThrs)
 		{
@@ -271,16 +334,37 @@ void send_message(char *message, uint8_t roleThrs)
       #else
       INFO("Sending message");
       INFOV(message);
-      #endif	
+      #endif
+      delay(500);	
 		}
 		
 		/* Next one */
 		p = p->next;
 	}
 } 
+
+void send_message(const __FlashStringHelper *message, uint8_t roleThrs)
+{
+  size_t n = strlen_P((const char*)message);
+  char buffer[n + 1]; //Size array as needed.
+  
+  #ifdef DEBUG
+  INFO("-> __FlashStringHelper -> ");
+  #endif
+  
+  memcpy_P( buffer, message, n);
+  buffer[n] = '\0';
+  /* Send the message with original function */
+  send_message(buffer,roleThrs);
+}
+
  
 void setup_monitor()
 {
+	#ifdef DEBUG
+  INFO("Monitor setup");
+  #endif
+  
 	/* Setup the monitor */
 	core.threshold = MONITORTHRESHOLD;
 	core.step = MONITORSTEP;
@@ -289,24 +373,33 @@ void setup_monitor()
   /* Monitor initially disabled */
 	core.enabled = 0;
 	core.value = 0;
+ 
+  /* Other */
+  lastDetection = false;
 }
 
 int load_phonebook(char *file)
 {
 	/* Loading phone book from a file */
-	char buffer[PHONENUMBERLENGTH];
-	SdFile f(file, O_READ);
+	char buffer[MAXBUFFERLENGTH];
+	SdFile f;
 	
 	INFO("Loading phone numbers");
-	
+
+  f.open(file, O_READ);
 	// Check for open error
   if (!f.isOpen()) 
 	{
 		ERROR("Cannot open file on SD card!");
+    ERRORV(file);
+    return;
 	}
 	
-  while (f.fgets(buffer, PHONENUMBERLENGTH) == NULL) 
+  while (f.fgets(buffer, MAXBUFFERLENGTH) > 0) 
 	{
+		#ifdef DEBUG
+		INFOV(buffer);
+    #endif
 		if (buffer[0] != '\n' && buffer[0] != '\r' && buffer[0] != '#')
 	  {
 			/* Add it to phone book */
@@ -318,13 +411,16 @@ int load_phonebook(char *file)
 				ERROR("Cannot allocate memory for a new phone number!");
 			}
 			
-			strncpy(n->number,buffer,PHONENUMBERLENGTH);
+			strncpy(n->number,buffer,PHONENUMBERLENGTH-1);
+      n->number[PHONENUMBERLENGTH-1] = '\0';
 			INFOV(n->number);
+      n->next = NULL;
+     
 			if (phonebook == NULL)
 			{
+        n->role = 0; /* Admin */
 				phonebook = n;
 				last = n;
-				n->role = 0; /* Admin */
 			}
 			else
 			{
@@ -334,25 +430,40 @@ int load_phonebook(char *file)
 			}
 			
 		}
+    #ifdef DEBUG
+    else
+    {
+      INFO("Skipping");
     }
+    #endif
+  }
 	f.close();
 }
 
 
-void setup_sdcard()
+boolean setup_sdcard()
 {
   /* Setup SD Card */
   /* Initialize at the highest speed supported by the board that is
      not over 50 MHz. Try a lower speed if SPI errors occur. */
+  boolean success = false; 
+  // SD_SCK_MHZ(50)
+  // SPI_HALF_SPEED
+  // SPI_EIGHTH_SPEED
+
+  pinMode(SDCARDCHIPSELECT,OUTPUT);   
+  digitalWrite(SDCARDCHIPSELECT, LOW);
   
-  if (!sd.begin(SDCARDCHIPSELECT, SD_SCK_MHZ(50))) 
+  if (!sd.begin(SDCARDCHIPSELECT, SPI_EIGHTH_SPEED)) 
   {
     ERROR("Cannot initialize SD card!");
   }
   else
   {
     INFO("SD card ready!");
+    success = true;
   }
+  return success;
 }
 
 /* Sleep functions */

@@ -6,7 +6,7 @@
 #define ERRORV(x)   Serial.println(x)
 #define INFO(x)     Serial.println(F(x))
 #define INFOV(x)    Serial.println(x)
-#define MSG(x)      (char*)F(x)
+#define MSG(x)      F(x)
 
 /* PIR */
 #define PIRMOTIONSENSOR   2
@@ -15,18 +15,20 @@
 /* Core Monitor */
 #define MONITORTHRESHOLD  20
 #define MONITORSTEP       1 
-#define MONITORFORGET     0.001
+#define MONITORFORGET     0.1
 
 /* SIM800 */
 #define DTR800            11
-#define PHONENUMBERLENGTH 13
+#define MAXBUFFERLENGTH   255
+#define PHONENUMBERLENGTH 14
 
 /* SD card */
-#define SDCARDCHIPSELECT  SS
+#define SDCARDCHIPSELECT  5
 
 /* Debug */
-#define NOSLEEP
-#define NOMESSAGE
+#define DEBUG
+// #define NOSLEEP
+#define NOMESSAGE 
 
 /********************************************************************************/
 /* Data types                                                                   */
