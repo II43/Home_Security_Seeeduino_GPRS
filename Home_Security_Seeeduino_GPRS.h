@@ -1,11 +1,24 @@
 #ifndef HOME_SECURITY_SEEEDUINO_GPRS_H
 #define HOME_SECURITY_SEEEDUINO_GPRS_H
 
+/* Debug */
+#define DEBUG
+// #define NOSLEEP
+#define NOMESSAGE 
+
 /* Macros */
+#if defined(DEBUG)
 #define ERROR(x)    Serial.println(F(x))
 #define ERRORV(x)   Serial.println(x)
 #define INFO(x)     Serial.println(F(x))
 #define INFOV(x)    Serial.println(x)
+#else
+#define ERROR(x)    
+#define ERRORV(x)   
+#define INFO(x)     
+#define INFOV(x)    
+#endif
+
 #define MSG(x)      F(x)
 
 /* PIR */
@@ -25,10 +38,8 @@
 /* SD card */
 #define SDCARDCHIPSELECT  5
 
-/* Debug */
-#define DEBUG
-// #define NOSLEEP
-#define NOMESSAGE 
+/* Sleep */
+#define SLEEPDISABLE     6
 
 /********************************************************************************/
 /* Data types                                                                   */

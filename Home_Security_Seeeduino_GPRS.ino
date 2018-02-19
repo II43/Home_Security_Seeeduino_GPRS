@@ -37,6 +37,8 @@ struct phone *last = NULL;
 /* PIR */
 const int PIRtp = PIRMOTIONSENSOR;
 
+/* Sleep */
+
 /********************************************************************************/
 /* Functions                                                                    */
 /********************************************************************************/
@@ -46,7 +48,7 @@ void setup()
   boolean success_sdcard;
   /* Main setup */
   Serial.begin(9600);
-  delay(10000);
+  delay(5000);
   INFO("Starting setup sequence");
   delay(500);
   
@@ -72,6 +74,10 @@ void setup()
   delay(500);
   
   setup_monitor();
+
+  /* Sleep */
+  pinMode(SLEEPDISABLE,INPUT_PULLUP);
+    
   INFO("Completed!");
   delay(200);
 }
@@ -104,24 +110,17 @@ void loop()
   
   surveillance();
   
-  #ifdef DEBUG
   INFOV(core.value);
   delay(200);
-  #endif
-  
+    
   /* Communication */
   if(gprs.serialSIM800.available()) 
   {
-    #ifdef DEBUG
     INFO("Something is available at SIM800");
-    delay(1000);
-    #endif
+    delay(500);
+
     gprs.readBuffer(gprsBuffer, MESSAGE_LENGTH, DEFAULT_TIMEOUT);
     delay(500);
-    
-    #ifdef DEBUG
-    //INFOV(gprsBuffer);
-    #endif
     
     if(NULL != strstr(gprsBuffer, "RING")) 
     {
@@ -146,9 +145,12 @@ void loop()
 
       /* Delete message */
       char at[MAXBUFFERLENGTH];
-      sprintf(at,"AT+CMGD=%d",messageIndex);
+      sprintf(at,"AT+CMGD=%d\r\n",messageIndex);
       gprs.sendCmd(at);
       delay(500);
+      INFO("Deleting message");
+      INFOV(at);
+      delay(100);
       
     }
     gprs.cleanBuffer(gprsBuffer,MESSAGE_LENGTH);
@@ -158,10 +160,13 @@ void loop()
   {
     /* Go to sleep */
     #ifndef NOSLEEP
-    INFO("Going to sleep now!");
-    delay(200);
-    int sleep_ms = Watchdog.sleep(8000);
-    INFO("I'm awake now!");	
+    if (digitalRead(SLEEPDISABLE))
+    {
+      INFO("Going to sleep now!");
+      delay(200);
+      int sleep_ms = Watchdog.sleep(8000);
+      INFO("I'm awake now!");
+    }	
     #endif
   }
 }
@@ -211,7 +216,7 @@ void setup_gprs()
   INFO("GPRS initialization successful!");
   
   // Get current date in format yy/MM/dd,hh:mm:ss
-  /* TODO - getCurrent Time function needs to be ported
+  /* TODO - getCurrentTime function needs to be ported
   char tmBuffer[sizeof("yy/MM/dd,hh:mm:ss")];
   gprs.getCurrentTime(tmBuffer);
   INFOV(tmBuffer);
@@ -223,9 +228,7 @@ void setup_gprs()
 }
 
 void process_message(char *message)
-{
-        /* AT+CMGD=1,4 */
-      /* AT+CPMS="SM" */
+{      
   char at[MAXBUFFERLENGTH];
   
   if(NULL != strstr(message,"ALIVE"))
@@ -266,8 +269,9 @@ void process_message(char *message)
     core.enabled = 0;
     INFO("Sending confirmation ... Reseting alarm!");
     send_message(MSG("Alarm reset!"), 1);
-
-    sprintf(at,"AT+CMGD=1,4");
+    
+    /* AT+CPMS="SM" */
+    sprintf(at,"AT+CMGD=1,4\r\n");
     gprs.sendCmd(at);
   }
   
@@ -348,9 +352,7 @@ void send_message(const __FlashStringHelper *message, uint8_t roleThrs)
   size_t n = strlen_P((const char*)message);
   char buffer[n + 1]; //Size array as needed.
   
-  #ifdef DEBUG
   INFO("-> __FlashStringHelper -> ");
-  #endif
   
   memcpy_P( buffer, message, n);
   buffer[n] = '\0';
@@ -361,9 +363,7 @@ void send_message(const __FlashStringHelper *message, uint8_t roleThrs)
  
 void setup_monitor()
 {
-	#ifdef DEBUG
   INFO("Monitor setup");
-  #endif
   
 	/* Setup the monitor */
 	core.threshold = MONITORTHRESHOLD;
@@ -480,8 +480,9 @@ void sleep_gprs()
 void wakeup_gprs()
 {
 	digitalWrite(DTR800,LOW);
-	delay(10);
+	delay(50);
 	gprs.serialSIM800.println();
+  delay(100);
 	gprs.serialSIM800.println("AT+CSCLK=0");
 }
 

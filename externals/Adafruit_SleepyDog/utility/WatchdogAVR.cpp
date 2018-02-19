@@ -62,23 +62,28 @@ int WatchdogAVR::sleep(int maxPeriodMS) {
     WDTCSR = wdps;                   // Set the prescaler bit values.
     WDTCSR |= (1<<WDIE);             // Enable only watchdog interrupts.
     // Critical section finished, re-enable interrupts.
-    sei();
+    //sei();
 
+	Serial.end();
+	
     // Disable USB if it exists
-    #ifdef USBCON
+		
+	  #ifdef USBCON
       USBCON |= _BV(FRZCLK);  //freeze USB clock
       PLLCSR &= ~_BV(PLLE);   // turn off USB PLL
       USBCON &= ~_BV(USBE);   // disable USB
     #endif
 	
-	// SIM800 goes to sleep
-	sleep_gprs();
 	
-	// Add external interrupt to wake on PIN2
-	attachInterrupt(digitalPinToInterrupt(PIRtp), ISR_PIR, CHANGE);
+  	// SIM800 goes to sleep
+  	sleep_gprs();
+  	
+  	// Add external interrupt to wake on PIN2
+  	attachInterrupt(digitalPinToInterrupt(PIRtp), ISR_PIR, CHANGE);
 	
     // Set full power-down sleep mode and go to sleep.
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+	  sei();
     sleep_mode();
 
     // Chip is now asleep!
@@ -87,11 +92,27 @@ int WatchdogAVR::sleep(int maxPeriodMS) {
     // sleep.
     sleep_disable();
 	
-	// Disable external interrupt
-	detachInterrupt(digitalPinToInterrupt(PIRtp));
+  	// Disable external interrupt
+  	detachInterrupt(digitalPinToInterrupt(PIRtp));
+
+      
+    // Routine to properly wake up
+    #ifdef DEBUG
+	/* If not in debug mode, the serial won't be available after first sleep */
+    delay(100);
+	USBDevice.attach();
+	delay(100);
+    Serial.begin(9600);
+    delay(100);
+    /* Wait for the serial monitor window */
+	#ifdef WAITFORMONITOR
+    while (!Serial) { }
+    Serial.println("Finished waking up!");
+	#endif
+    #endif
 	
-	// SIM800 wakes up
-	wakeup_gprs(); 
+  	// SIM800 wakes up
+  	wakeup_gprs(); 
 
     // Check if the user had the watchdog enabled before sleep and re-enable it.
     if (_wdto != -1) {

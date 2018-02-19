@@ -6,6 +6,9 @@ extern void wakeup_gprs();
 
 extern const int PIRtp;
 
+#define DEBUG
+//#define WAITFORMONITOR
+
 class WatchdogAVR {
 public:
     WatchdogAVR():
